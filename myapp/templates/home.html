@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RAG</title>
+</head>
+<body>
+  <form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div>
+      <input id="pdfs" name="pdfs" type="file" accept=".pdf" multiple />
+    </div>
+
+    <div>
+      <input id="question" name="question" type="text" placeholder="Ask about your PDFs..." />
+      <button type="submit" >Ask</button>
+    </div>
+
+  </form>
+
+  {% if answer %}
+   <div>
+     <h3>Answer:</h3>
+     <p>{{ answer }}</p>
+   </div>
+  {% endif %}
+
+</body>
+</html>
