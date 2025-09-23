@@ -1,17 +1,25 @@
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
 import os
 from pypdf import PdfReader
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_chroma import Chroma
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.prompts import PromptTemplate
-from langchain.chains.question_answering import load_qa_chain
+from langchain.chains import RetrievalQA
+
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.shortcuts import redirect
+
 
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  
+CHROMA_DIR = os.getenv("CHROMA_DIR")
 
 def get_pdf_text(pdfs_docs):
     text = ""
@@ -20,48 +28,52 @@ def get_pdf_text(pdfs_docs):
         for page in reader.pages:
             page_text = page.extract_text()
             if page_text:
-                text += page_text
+                text += page_text + "\n"
     return text
 
 
 def get_text_chunks(text):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1500,
+        chunk_overlap=200
+    )
     return splitter.split_text(text)
 
 
-def get_vectorstore(text_chunks):
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
-        google_api_key=GEMINI_API_KEY 
+def get_embeddings():
+    return GoogleGenerativeAIEmbeddings(
+        model = os.getenv("EMBEDDING_MODEL"),
+        google_api_key=GEMINI_API_KEY
     )
 
-    # metadatas = [{"source": pdf_name, "chunk": i} for i in range(len(text_chunks))]
-    
-    vectorstore = Chroma.from_texts(
-        texts=text_chunks,
-        embedding=embeddings,
-        persist_directory="chromaDB_index",
-        # metadatas=metadatas
-    )
-    vectorstore.persist()
+
+def get_or_create_vectorstore(text_chunks=None):
+    embeddings = get_embeddings()
+
+    if os.path.isdir(CHROMA_DIR):
+        vectorstore = Chroma(
+            persist_directory=CHROMA_DIR,
+            embedding_function=embeddings
+        )
+        if text_chunks:
+            vectorstore.add_texts(text_chunks)
+    else:
+        if not text_chunks:
+            raise ValueError("No text chunks provided to create a new vectorstore.")
+        vectorstore = Chroma.from_texts(
+            texts=text_chunks,
+            embedding=embeddings,
+            persist_directory=CHROMA_DIR
+        )
+
     return vectorstore
 
 
-def load_vectorstore():
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
-        google_api_key=GEMINI_API_KEY 
-    )
-    return Chroma(
-        persist_directory="chromaDB_index",
-        embedding_function=embeddings
-    )
-
-
-def get_conversation_chain():
+def get_conversation_chain(vectorstore):
     prompt_template = """
-Answer the question as detailed as possible from the context provided. Make sure to provide all the details. 
-If the answer is not present in the context, say "I don't know". Don't provide a wrong answer.
+Answer the question as detailed as possible from the context provided. 
+If the answer is not present in the context, say "I don't know". 
+Do not make up an answer.
 
 Context:
 {context}
@@ -73,41 +85,59 @@ Answer:
     """.strip()
 
     model = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model = os.getenv("CHAT_MODEL"),
         temperature=0.3,
-        google_api_key=GEMINI_API_KEY  
+        google_api_key=GEMINI_API_KEY
     )
 
-    prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
-    chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
-    return chain
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
+    prompt = PromptTemplate(
+        template=prompt_template,
+        input_variables=["context", "question"]
+    )
 
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=model,
+        retriever=retriever,
+        chain_type="stuff",
+        chain_type_kwargs={"prompt": prompt}
+    )
+
+    return qa_chain
 
 @csrf_exempt
-def home(request):
+def chat(request):
     answer = None
+    session_id = request.session.get("session_id")
+    if not session_id:
+        session_id = get_random_string(32)
+        request.session["session_id"] = session_id
 
-    if request.method == "POST":   
-        pdfs_docs = request.FILES.getlist("pdfs") 
+    if request.method == "POST":
+        pdfs_docs = request.FILES.getlist("pdfs")
         user_question = request.POST.get("question", "").strip()
 
+        vectorstore = None
         if pdfs_docs:
-            for pdf in pdfs_docs:
-                # pdf_name = pdf.name 
-                raw_text = get_pdf_text([pdf])
-                chunks = get_text_chunks(raw_text)
-                vectorstore = get_vectorstore(chunks)
+            combined_text = get_pdf_text(pdfs_docs)
+            chunks = get_text_chunks(combined_text)
+            vectorstore = get_or_create_vectorstore(chunks)
+        elif os.path.isdir(CHROMA_DIR):
+            vectorstore = get_or_create_vectorstore()
 
-        elif os.path.isdir("chromaDB_index"):
-            vectorstore = load_vectorstore()
-        else:
-            return render(request, "home.html", {"answer": "No PDFs uploaded and no index found."})
+        if user_question and vectorstore:
+            qa_chain = get_conversation_chain(vectorstore)
+            result = qa_chain.invoke(user_question)["result"]
+            answer = result if result else "I don't know"
 
-        if user_question:
-            docs = vectorstore.similarity_search(user_question, k=4)
-            chain = get_conversation_chain()
-            result = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
-            answer = result["output_text"]
+            chat_log = request.session.get("chat_log", [])
+            chat_log.append({"question": user_question, "answer": answer})
+            request.session["chat_log"] = chat_log
 
-    return render(request, "home.html", {"answer": answer})
+
+    chat_history = request.session.get("chat_log", [])
+
+    return render(request, "home.html", {"answer": answer, "chat_history": chat_history})
+
+
