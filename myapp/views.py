@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.crypto import get_random_string
 from dotenv import load_dotenv
@@ -14,6 +14,8 @@ from langchain.chains import RetrievalQA
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.shortcuts import redirect
+
+import markdown2
 
 
 load_dotenv()
@@ -71,9 +73,19 @@ def get_or_create_vectorstore(text_chunks=None):
 
 def get_conversation_chain(vectorstore):
     prompt_template = """
-Answer the question as detailed as possible from the context provided. 
-If the answer is not present in the context, say "I don't know". 
-Do not make up an answer.
+You are QuillQuery, an AI assistant for answering questions based on PDF documents.  
+Always provide responses in **clear, structured Markdown format**.  
+
+### Formatting Rules:
+- Begin with a **short 1–2 line introduction**.  
+- Use **separate paragraphs** for different ideas.  
+- Use **bullet points** (•) or **numbered lists** (1., 2., 3.) for comparisons, steps, or key points. 
+- Highlight key terms with **bold text**.  
+- End with a short **summary or conclusion**.  
+- If the answer is not in the context, reply only: "I don't know".  
+- Never invent or hallucinate beyond the provided context.  
+
+---
 
 Context:
 {context}
@@ -81,11 +93,11 @@ Context:
 Question:
 {question}
 
-Answer:
+Answer (formatted in Markdown):
     """.strip()
 
     model = ChatGoogleGenerativeAI(
-        model = os.getenv("CHAT_MODEL"),
+        model=os.getenv("CHAT_MODEL"),
         temperature=0.3,
         google_api_key=GEMINI_API_KEY
     )
@@ -106,9 +118,9 @@ Answer:
 
     return qa_chain
 
+
 @csrf_exempt
 def chat(request):
-    answer = None
     session_id = request.session.get("session_id")
     if not session_id:
         session_id = get_random_string(32)
@@ -131,13 +143,15 @@ def chat(request):
             result = qa_chain.invoke(user_question)["result"]
             answer = result if result else "I don't know"
 
+            answer_html = markdown2.markdown(answer)
+
             chat_log = request.session.get("chat_log", [])
-            chat_log.append({"question": user_question, "answer": answer})
+            chat_log.append({"question": user_question, "answer": answer_html})
             request.session["chat_log"] = chat_log
 
+        # Redirect to GET to avoid resubmission on refresh
+        return redirect("chat")  # <--- replace with your URL name for this view
 
+    # GET request
     chat_history = request.session.get("chat_log", [])
-
-    return render(request, "home.html", {"answer": answer, "chat_history": chat_history})
-
-
+    return render(request, "home.html", {"chat_history": chat_history})
