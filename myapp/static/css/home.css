@@ -1,8 +1,55 @@
+.body {
+  background-color: #faf1ff;
+}
+
 .gradient-text {
   background: linear-gradient(to right, #9a6bdc, #fbbf24, #4338ca, #6366f1); 
   background-clip: text;
   -webkit-background-clip: text; 
   -webkit-text-fill-color: transparent;
+}
+
+.chat-container {
+  max-width: 800px;
+}
+
+.chat-question {
+  max-width: 70%;
+  background: #b187c7;
+}
+
+.chat-answer {
+  max-width: 70%;
+  background: #5d64b0;
+}
+
+.chat-form {
+  max-width: 800px;
+}
+
+.upload-btn,
+.send-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.no-focus:focus { 
+  outline: none !important; 
+  box-shadow: none !important; 
+}
+
+textarea.no-focus {
+  overflow-y: auto;   
+  max-height: 150px;   
+}
+
+textarea.no-focus::-webkit-scrollbar {
+  width: 6px;
+}
+
+textarea.no-focus::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 3px;
 }
 
 #file-preview .file-chip {
