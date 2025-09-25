@@ -12,5 +12,5 @@ pypdf
 chromadb
 
 markdown2
-
+whitenoise
 
