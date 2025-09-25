@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-*-@mh#zj9tl&*bd53*@=8o^$5l0#9vspfwicgun6xysa(a^938
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["quillquery.onrender.com"]
 
 
 # Application definition
