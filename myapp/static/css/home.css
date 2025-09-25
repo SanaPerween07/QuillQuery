@@ -1,5 +1,14 @@
-.body {
-  background-color: #faf1ff;
+body{
+  height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #f6ebfc;
+}
+
+.header {
+  flex: 0 0 auto; 
+  z-index: 1030;
 }
 
 .gradient-text {
@@ -9,8 +18,17 @@
   -webkit-text-fill-color: transparent;
 }
 
+#chat-wrapper {
+  flex: 1 1 auto;       
+  overflow-y: auto;     
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
 .chat-container {
   max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem;
 }
 
 .chat-question {
@@ -25,6 +43,16 @@
 
 .chat-form {
   max-width: 800px;
+}
+
+.chat-input {
+  flex: 0 0 auto;       
+  z-index: 1030;
+  width: 100%;
+  position: sticky;
+  bottom: 0;
+  background-color: #fff;
+  padding: 0.5rem 1rem;
 }
 
 .upload-btn,
@@ -52,7 +80,7 @@ textarea.no-focus::-webkit-scrollbar-thumb {
   border-radius: 3px;
 }
 
-#file-preview .file-chip {
+.file-chip {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -63,11 +91,11 @@ textarea.no-focus::-webkit-scrollbar-thumb {
   font-size: 0.9rem;
 }
 
-#file-preview .file-pdf {
+.file-pdf {
   color: #f71d16;
 }
 
-#file-preview .file-remove {
+.file-remove {
   color: #6c757d;
   font-weight: bold;
   font-size: 1rem;        
@@ -75,6 +103,8 @@ textarea.no-focus::-webkit-scrollbar-thumb {
   cursor: pointer;
 }
 
-#file-preview .file-remove:hover {
+.file-remove:hover {
   color: #ff0c04; 
 }
+
+
